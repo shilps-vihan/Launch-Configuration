@@ -1,0 +1,664 @@
+{  
+   "AWSTemplateFormatVersion":"2010-09-09",
+   "Description":"AWS CFT that creates an ELB, Security Group, and Listeners",
+   "Metadata":{  
+      "TemplateInfo":{  
+         "ProductName":"LoadBalancer",
+         "TemplateID":"VPM_LoadBalancer"
+      },
+      "AWS::CloudFormation::Interface":{  
+         "ParameterGroups":[  
+            {  
+               "Label":{  
+                  "default":"Mandatory"
+               },
+               "Parameters":[  
+                  "AppID",
+                  "Name",
+                  "UserID",
+                  "Role"
+               ]
+            },
+            {  
+               "Label":{  
+                  "default":"General"
+               },
+               "Parameters":[  
+                  "Environment",
+                  "JenkinsBuildNumber"
+               ]
+            },
+            {  
+               "Label":{  
+                  "default":"Load Balancer"
+               },
+               "Parameters":[  
+                  "ELBSubnets",
+                  "ELBType"
+               ]
+            }
+         ]
+      }
+   },
+   "Parameters":{  
+      "AppID":{  
+         "Default":"I8GV",
+         "Type":"String",
+         "Description":"VAST ID",
+         "AllowedValues":[  
+            "I8GV"
+         ]
+      },
+      "Name":{  
+         "Type":"String",
+         "Description":"Resource Name"
+      },
+      "UserID":{  
+         "Type":"String",
+         "Description":"TEST"
+      },
+      "Role":{  
+         "Default":"App",
+         "Type":"String",
+         "Description":"Role",
+         "AllowedValues":[  
+            "Web",
+            "App"
+         ]
+      },
+      "TGNAME": {
+         "Type": "String"
+      },
+      "CISD": {
+      "Type": "String"
+       },
+      "VPCID": {
+      "Type": "String"
+       },
+      "Environment":{  
+         "Default":"DEV",
+         "Type":"String",
+         "Description":"The Target Environment for these Resources",
+         "AllowedValues":[  
+            "DEV",
+            "UAT",
+            "NONPROD",
+            "PLE",
+            "PRD"
+         ]
+      },
+      "JenkinsBuildNumber":{  
+         "Default":0,
+         "Description":"The Jenkins Build Number for Uniqueness",
+         "Type":"Number"
+      },
+      "ELBsecuritygroups":{
+         "Type": "List<AWS::EC2::SecurityGroup::Id>"
+      },
+
+      "ELBSubnets":{  
+         "Type":"List<AWS::EC2::Subnet::Id>",
+         "Description":"Subnets the ELB will span"
+      },
+    "LCNAME": {
+      "Type": "String"
+    },
+    "TGNAME": {
+      "Type": "String"  
+    },
+    "ASGNAME": {
+      "Type": "String"
+    },
+    "VPCID": {
+      "Type": "String"
+    },
+   "Subnets": {
+      "Type": "List<AWS::EC2::Subnet::Id>"
+    },
+    "Zones": {
+      "Type": "List<AWS::EC2::AvailabilityZone::Name>"
+    },
+      "ELBType":{  
+         "Default":"application",
+         "Type":"String",
+         "Description":"Type of ELB to Provision",
+         "AllowedValues":[  
+            "application",
+            "network"
+         ]
+      }
+   },
+   "Mappings":{  
+      "DEV":{  
+         "us-east-1":{  
+            "SSLCert":"arn:aws:acm:us-east-1:084309170734:certificate/1ccb4db9-fd08-4ae5-921b-ec45812dac99",
+            "SgInfra":"sg-6645cb19",
+            "Vpc":"vpc-fa634f9c"
+         },
+         "us-west-2":{  
+            "SSLCert":"arn:aws:acm:us-west-2:084309170734:certificate/ff02d904-c5db-4bbc-900d-885e82d1d0f5",
+            "SgInfra":"sg-f9e20b82",
+            "Vpc":"vpc-01cc8466"
+         }
+      },
+      "UAT":{  
+         "us-east-1":{
+            "SSLCert":"",
+            "SgInfra":"",
+            "Vpc":""
+         },
+         "us-west-2":{  
+            "SSLCert":"",
+            "SgInfra":"",
+            "Vpc":""
+         }
+      },
+      "PLE":{  
+         "us-east-1":{
+            "SSLCert":"",
+            "SgInfra":"",
+            "Vpc":""  
+         },
+         "us-west-2":{ 
+            "SSLCert":"",
+            "SgInfra":"",
+            "Vpc":"" 
+         }
+      },
+      "PRD":{  
+         "us-east-1":{  
+            "SSLCert":"",
+            "SgInfra":"",
+            "Vpc":""
+         },
+         "us-west-2":{  
+            "SSLCert":"",
+            "SgInfra":"",
+            "Vpc":""
+         }
+      }
+   },
+   "Resources": {
+      "NotificationTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "Subscription": [
+          {
+            "Endpoint": "shilpa.rani.basole@verizon.com",
+            "Protocol": "email"
+          }
+        ]
+      }
+    },
+    "ALBTargetGroup": {
+    "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+    "Properties": {
+      "HealthCheckIntervalSeconds": 30,
+      "HealthCheckProtocol": "HTTPS",
+	    "HealthCheckPath": "/",
+      "Matcher": {
+        "HttpCode": "200-399"
+      },
+      "Name": {"Ref" : "TGNAME"},
+      "Port": 443,
+      "Protocol": "HTTPS",
+      "VpcId" : {"Ref" : "VPCID"},
+      "TargetGroupAttributes": [{
+         "Key" : "slow_start.duration_seconds",
+         "Value" : "600"
+      }] 
+    }
+  },	      
+  "asg": {
+    "Type": "AWS::AutoScaling::AutoScalingGroup",
+    "Properties": {
+      "AutoScalingGroupName" : {"Ref" : "ASGNAME" },
+      "TargetGroupARNs": [
+         {"Ref": "ALBTargetGroup"}
+        ],
+          "MinSize": "1",
+        "VPCZoneIdentifier": {
+          "Ref": "Subnets"
+        },
+        "LaunchConfigurationName": {
+          "Ref": "LCNAME"
+        },
+        "AvailabilityZones": {
+          "Ref": "Zones"
+        },
+        "DesiredCapacity": "1",
+        "Tags": [
+          {
+            "PropagateAtLaunch": "true",
+            "Value": {
+              "Ref": "UserID"
+            },
+            "Key": "UserID"
+          },
+          {
+            "PropagateAtLaunch": "true",
+            "Value": {
+              "Ref": "CISD"
+          },
+          "Key": "ENVIRONMENT"
+          },
+          {
+            "PropagateAtLaunch": "true",
+            "Value": {
+              "Ref": "AppID"
+            },
+            "Key": "Vsad"
+          },
+          {
+            "PropagateAtLaunch": "true",
+            "Value": {"Ref": "LCNAME"},
+            "Key": "Name"
+          },
+          {
+            "PropagateAtLaunch": "true",
+            "Value": {
+              "Ref": "Role"
+            },
+            "Key": "Role"
+          },
+          {
+            "PropagateAtLaunch": "true",
+            "Value": "Version1.2",
+            "Key": "NTS Pipeline"
+          },
+		  {
+		    "PropagateAtLaunch": "true",
+		    "Key": "nostop",
+		    "Value": ""
+   		  }
+        ],
+        "MaxSize": "2",
+        "TerminationPolicies" : ["NewestInstance"],
+        "HealthCheckGracePeriod": "800",
+        "NotificationConfiguration": {
+          "NotificationTypes": [
+            "autoscaling:EC2_INSTANCE_LAUNCH",
+            "autoscaling:EC2_INSTANCE_LAUNCH_ERROR",
+            "autoscaling:EC2_INSTANCE_TERMINATE",
+            "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
+          ],
+          "TopicARN": {
+            "Ref": "NotificationTopic"
+          }
+        },
+        "HealthCheckType": "EC2"
+      },
+      "UpdatePolicy": {
+        "AutoScalingRollingUpdate": {
+          "PauseTime": "PT10M",
+          "MaxBatchSize": "1"
+        }
+      }
+    },
+    "scaleuppolicy": {
+      "Type": "AWS::AutoScaling::ScalingPolicy",
+      "Properties": {
+        "EstimatedInstanceWarmup": "60",
+        "AdjustmentType": "ChangeInCapacity",
+        "AutoScalingGroupName": {
+          "Ref": "asg"
+        },
+        "PolicyType": "StepScaling",
+        "StepAdjustments": [
+          {
+            "ScalingAdjustment": "1",
+            "MetricIntervalLowerBound": "0"
+          }
+        ],
+        "MetricAggregationType": "Average"
+      }
+    },
+    "scaledownpolicy": {
+      "Type": "AWS::AutoScaling::ScalingPolicy",
+      "Properties": {
+        "EstimatedInstanceWarmup": "60",
+        "AdjustmentType": "ChangeInCapacity",
+        "AutoScalingGroupName": {
+          "Ref": "asg"
+        },
+        "PolicyType": "StepScaling",
+        "StepAdjustments": [
+          {
+            "ScalingAdjustment": "-1",
+            "MetricIntervalUpperBound": "0"
+          }
+        ],
+        "MetricAggregationType": "Average"
+      }
+    },
+    "cpualarmlow": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": {
+              "Ref": "asg"
+            }
+          }
+        ],
+        "EvaluationPeriods": "3",
+        "AlarmActions": [
+          {
+            "Ref": "scaledownpolicy"
+          }
+        ],
+        "Threshold": "40",
+        "Statistic": "Average",
+        "AlarmDescription": "Alarm if CPU falls below CPUlow threshold for a sustained period of 60 seconds",
+        "Namespace": "AWS/EC2",
+        "Period": "60",
+        "MetricName": "CPUUtilization"
+      }
+    },
+    "cpualarmhigh": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": {
+              "Ref": "asg"
+            }
+          }
+        ],
+        "EvaluationPeriods": "3",
+        "AlarmActions": [
+          {
+            "Ref": "scaleuppolicy"
+          }
+        ],
+        "Threshold": "70",
+        "Statistic": "Average",
+        "AlarmDescription": "Alarm if CPU > CPUhigh threshold for a sustained period of 60 seconds",
+        "Namespace": "AWS/EC2",
+        "Period": "60",
+        "MetricName": "CPUUtilization"
+      }
+    },
+    "VzELB":{  
+      "Type":"AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "Properties":{  
+         "Name":{  
+            "Fn::Join":[  
+                  "-",
+              [  
+                     {  
+                        "Ref":"Name"
+                     },
+                     "ELB",
+                     {  
+                        "Ref":"JenkinsBuildNumber"
+                     }
+                  ]
+               ]
+            },
+            "Scheme":"internal",
+            "SecurityGroups":{  
+               "Ref":"ELBsecuritygroups"
+            },
+            "Subnets":{  
+               "Ref":"ELBSubnets"
+            },
+            "Tags":[  
+               {  
+                  "Key":"UserID",
+                  "Value":{  
+                     "Ref":"UserID"
+                  }
+               },
+               {
+                  "Key": "ENVIRONMENT",
+                  "Value": {
+                     "Ref": "CISD"
+                  }
+               },
+               {  
+                  "Key":"Vsad",
+                  "Value":{  
+                     "Ref":"AppID"
+                  }
+               },
+               {  
+                  "Key":"Name",
+                  "Value":{  
+                     "Fn::Join":[  
+                        "-",
+                        [  
+                           {  
+                              "Ref":"Name"
+                           },
+                           "ELB",
+                           {  
+                              "Ref":"JenkinsBuildNumber"
+                           }
+                        ]
+                     ]
+                  }
+               },
+               {  
+                  "Key":"Role",
+                  "Value":{  
+                     "Ref":"Role"
+                  }
+               }
+            ],
+            "Type":{  
+               "Ref":"ELBType"
+            }
+            
+         }
+      },      
+      "VzHttpListener":{  
+         "Type":"AWS::ElasticLoadBalancingV2::Listener",
+         "Properties":{  
+            "LoadBalancerArn":{  
+               "Ref":"VzELB"
+            },
+            "Protocol":"HTTP",
+            "Port":"80",
+            "DefaultActions":[  
+               {  
+                  "Type":"redirect",
+                  "RedirectConfig":{  
+                     "Host":"#{host}",
+                     "Path":"/#{path}",
+                     "Port":"443",
+                     "Protocol":"HTTPS",
+                     "Query":"#{query}",
+                     "StatusCode":"HTTP_301"
+                  }
+               }
+            ]
+         }
+      },
+      "VzHttpsListener":{  
+         "Type":"AWS::ElasticLoadBalancingV2::Listener",
+         "Properties":{  
+            "LoadBalancerArn":{  
+               "Ref":"VzELB"
+            },
+            "Protocol":"HTTPS",
+            "Port":"443",
+            "SslPolicy":"ELBSecurityPolicy-TLS-1-2-2017-01",
+            "DefaultActions":[  
+               {  
+                  "Type":"forward",
+                   "TargetGroupArn": {
+                      "Ref": "ALBTargetGroup"
+                      } 
+               }
+            ],
+            "Certificates":[  
+               {  
+                  "CertificateArn":{  
+                     "Fn::FindInMap":[  
+                        {  
+                           "Ref":"Environment"
+                        },
+                        {  
+                           "Ref":"AWS::Region"
+                        },
+                        "SSLCert"
+                     ]
+                  }
+               }
+            ]
+         }
+      },
+      "VzLoadBalancerSecurityGroup":{  
+         "Type":"AWS::EC2::SecurityGroup",
+         "Properties":{  
+            "GroupName":{  
+               "Fn::Join":[  
+                  "-",
+                  [  
+                     "NTS",
+                     {
+                         "Ref": "AppID"
+                     },
+                     {
+                         "Ref": "Name"
+                     },
+                     "sgELB",
+                     {  
+                        "Ref":"JenkinsBuildNumber"
+                     }
+                  ]
+               ]
+            },
+            "GroupDescription":{  
+               "Fn::Join":[  
+                  "-",
+                  [  
+                     "NTS",
+                     {
+                         "Ref": "AppID"
+                     },
+                     {
+                         "Ref": "Name"
+                     },
+                     "sgELB",
+                     {  
+                        "Ref":"JenkinsBuildNumber"
+                     }
+                  ]
+               ]
+            },
+            "SecurityGroupIngress":[  
+               {  
+                  "CidrIp":"114.0.0.0/8",
+                  "Description":"Twinsburg VPN",
+                  "IpProtocol":"tcp",
+                  "FromPort":443,
+                  "ToPort":443
+               },
+               {  
+                  "CidrIp":"10.76.0.0/16",
+                  "Description":"Tampa VTEAM",
+                  "IpProtocol":"tcp",
+                  "FromPort":443,
+                  "ToPort":443
+               }
+            ],
+            "SecurityGroupEgress":[  
+               {  
+                  "IpProtocol":"-1",
+                  "CidrIp":"0.0.0.0/0"
+               }
+            ],
+            "Tags":[  
+               {  
+                  "Key":"UserID",
+                  "Value":{  
+                     "Ref":"UserID"
+                  }
+               },
+               {
+                  "Key": "ENVIRONMENT",
+                  "Value": {
+                     "Ref": "CISD"
+                  }
+               },
+               {  
+                  "Key":"Vsad",
+                  "Value":{  
+                     "Ref":"AppID"
+                  }
+               },
+               {  
+                  "Key":"Name",
+                  "Value":{  
+                     "Fn::Join":[  
+                        "-",
+                            [  
+                            "NTS",
+                            {
+                                "Ref": "AppID"
+                            },
+                            {
+                                "Ref": "Name"
+                            },
+                            "sgELB",
+                            {  
+                                "Ref":"JenkinsBuildNumber"
+                            }
+                        ]
+                     ]
+                  }
+               },
+               {  
+                  "Key":"Role",
+                  "Value":"App"
+               }
+            ],
+            "VpcId":{  
+               "Fn::FindInMap":[  
+                  {  
+                     "Ref":"Environment"
+                  },
+                  {  
+                     "Ref":"AWS::Region"
+                  },
+                  "Vpc"
+               ]
+            }            
+      }
+      } 
+},
+"Outputs": {
+    "asg": {
+      "Description": "AutoScalingGroup Name",
+      "Value": {
+        "Ref": "asg"
+      },
+      "Export": {"Name":"API-STACK"}
+    },
+    "ELBARNName": {
+      "Description": "ARN Name",
+      "Value": {
+        "Ref": "VzELB"
+      },
+      "Export": {"Name":"API-ARN"}
+    },
+    "ELBDNSNAME":{
+       "Description": "DNS Name",
+       "Value": {
+          "Fn::GetAtt": [
+             "VzELB",
+             "DNSName"
+          ]
+       },
+       "Export": {"Name":"API-DNS"}
+        
+    }
+}
+}  
+
