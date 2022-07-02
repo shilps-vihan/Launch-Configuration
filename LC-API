@@ -1,0 +1,85 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "AWS: Creating new launch configuration",
+  "Parameters": {
+    "AppID": {
+      "Type": "String"
+    },
+    "UserID": {
+      "Type": "String"
+    },
+    "Role": {
+      "Type": "String",
+      "Default": "app"
+    },
+    "APPAMI": {
+      "Type": "String"
+    },
+    "LCNAME": {
+      "Type": "String"
+    },
+    "HostRegion": {
+      "Type": "String"
+    },
+    "ARTIFACTORYURL": {
+      "Type": "String"
+    },
+    "KIT": {
+      "Type": "String"
+    },
+    "DNS": {
+      "Type": "String"
+    },
+     "KEY": {
+      "Type": "String"
+    },
+    "INSTANCETYPE": {
+      "Type": "String"
+    },
+    "INSTANCEPROFILE": {
+      "Type": "String"
+    },
+    "SECURITYGROUPS": {
+      "Type": "List<AWS::EC2::SecurityGroup::Id>"
+    }
+  },
+  "Resources": {
+    "launchconfig": {
+      "Type": "AWS::AutoScaling::LaunchConfiguration",
+      "Properties": {
+        "IamInstanceProfile": {
+          "Ref": "INSTANCEPROFILE"
+        },
+        "SecurityGroups": {
+          "Ref": "SECURITYGROUPS"
+        },
+        "InstanceType": {"Ref": "INSTANCETYPE"},
+        "ImageId": {"Ref": "APPAMI"},
+        "LaunchConfigurationName" : {"Ref": "LCNAME"},
+        "UserData": { "Fn::Base64" : { "Fn::Join" : ["", [
+          "#!/bin/bash -xe\n",
+          "mkdir -p /apps/opt/vendoruserservice", "\n",
+          "cd /apps/opt/vendoruserservice", "\n",
+          "curl -O -u jenkins:jenkins123  https://oneartifactoryprod.verizon.com/artifactory/I8GV_NonProd/VOSPMS/vendoruserservice/", {"Ref":"KIT"},   "\n",
+           "nohup ",  {"Ref":"KEY"}, "\n",
+           "export version=",{"Ref":"KIT"}, "\n",
+           "echo $version >> version.txt", "\n",
+           "cd /var/www/html", "\n",
+           "touch index.html", "\n",
+           "sed -i -e 's/^.*NTS-I8GV-VPAAS.*$/  app_name: NTS-I8GV-VPAAS-MS-DEV-GZ/g' /apps/tools/newrelic/newrelic.yml", "\n",
+           "sed -i 's/Allow from all/Require all granted/g' /etc/httpd/conf/httpd.conf", "\n",
+           "/usr/sbin/httpd -k stop", "\n",
+           "/usr/sbin/httpd -k start"
+        ]]}}
+      }
+    }
+  },
+  "Outputs": {
+    "launchconfig": {
+      "Description": "Launch Config Name",
+      "Value": {
+        "Ref": "launchconfig"
+      }
+    }
+  }
+ }
